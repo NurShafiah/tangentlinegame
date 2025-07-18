@@ -6,6 +6,8 @@
     <title>Tangent Line Game</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Confetti library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
     <style>
         /* Custom styles for the canvas and overall layout */
         body {
@@ -443,6 +445,12 @@
                     <p>Actual Gradient: ${actualSlope.toFixed(2)}</p>
                     <p>Your Estimated Gradient: ${userSlope.toFixed(2)}</p>
                 `;
+                // Trigger confetti!
+                confetti({
+                    particleCount: 100,
+                    spread: 70,
+                    origin: { y: 0.6 } // From the middle-top of the screen
+                });
             } else {
                 feedbackDiv.classList.add('incorrect');
                 feedbackDiv.classList.remove('correct');
@@ -456,20 +464,22 @@
                         feedbackText += `too flat (not steep enough).`;
                     }
                 } else if (actualSlope < 0) { // Actual slope is negative
-                    // For negative slopes:
-                    // userSlope > actualSlope (e.g., actual -2, user -0.9) means closer to 0, less steep.
-                    // userSlope < actualSlope (e.g., actual -2, user -3) means further from 0, more steep.
-                    if (userSlope > actualSlope) {
+                    if (userSlope >= 0) { // User's slope is positive or zero (should be negative)
+                        feedbackText += `too steep (it should be negative).`;
+                    } else { // User's slope is also negative
+                        if (Math.abs(userSlope) > Math.abs(actualSlope)) {
+                            feedbackText += `too steep.`;
+                        } else {
+                            feedbackText += `too flat (not steep enough).`;
+                        }
+                    }
+                } else { // actualSlope is 0 (horizontal)
+                    if (userSlope > 0) {
+                        feedbackText += `too steep.`;
+                    } else if (userSlope < 0) {
                         feedbackText += `too flat (not steep enough).`;
                     } else {
-                        feedbackText += `too steep.`;
-                    }
-                } else { // Actual slope is zero (horizontal)
-                    if (Math.abs(userSlope) > TANGENT_TOLERANCE) {
-                        feedbackText += `not horizontal.`;
-                    } else {
                         // This case should ideally not be reached if diff > TANGENT_TOLERANCE
-                        // but userSlope is very close to 0.
                         feedbackText += `slightly off horizontal.`;
                     }
                 }
