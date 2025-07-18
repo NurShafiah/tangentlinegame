@@ -127,6 +127,11 @@
         <h1 class="text-3xl font-bold text-gray-800 mb-4">Tangent Line Explorer</h1>
         <p class="text-lg text-gray-600 mb-6 text-center">Click and drag the blue line *from the red point* to make it tangent to the curve. Then, check your answer!</p>
 
+        <div class="flex justify-between w-full max-w-md mb-4 text-xl font-semibold text-gray-700">
+            <span>Score: <span id="scoreDisplay">0</span></span>
+            <span>Challenge: <span id="challengeNumberDisplay">1</span></span>
+        </div>
+
         <canvas id="gameCanvas"></canvas>
 
         <div class="controls">
@@ -154,6 +159,10 @@
         const messageBox = document.getElementById('messageBox');
         const messageText = document.getElementById('messageText');
         const messageBoxCloseBtn = document.getElementById('messageBoxCloseBtn');
+        // New UI elements for gamification
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const challengeNumberDisplay = document.getElementById('challengeNumberDisplay');
+
 
         // --- Canvas and Coordinate System Setup ---
         const CANVAS_WIDTH = 800; // Will be scaled by CSS
@@ -192,12 +201,14 @@
         }
 
         // --- Game State Variables ---
+        let score = 0; // Initialize score
         let currentCurve = null;
         let currentDerivative = null;
         let targetPoint = { x: 0, y: 0 }; // Mathematical coordinates
         let userLineAngle = 0; // Radians
         let isDragging = false;
-        const TANGENT_TOLERANCE = 0.1; // Tolerance for checking tangent slope
+        const TANGENT_TOLERANCE_BASE = 0.1; // Base tolerance for checking tangent slope
+        let currentTangentTolerance = TANGENT_TOLERANCE_BASE; // Dynamic tolerance
 
         // Add a counter for challenges and specific x values for initial quadratic challenges
         let challengeCount = 0;
@@ -365,6 +376,18 @@
             drawCurve();
             drawTargetPoint();
             drawUserLine();
+
+            // Draw curve name and point coordinates
+            if (currentCurve && targetPoint) {
+                ctx.fillStyle = '#334155'; // Darker text color
+                ctx.font = 'bold 18px Inter'; // Larger, bold font
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                const pointX = targetPoint.x.toFixed(2);
+                const pointY = targetPoint.y.toFixed(2);
+                const curveInfo = `${currentCurve.name} at (${pointX}, ${pointY})`;
+                ctx.fillText(curveInfo, 10, 10); // Position in top-left corner
+            }
         }
 
         // --- Game Logic ---
@@ -376,6 +399,13 @@
             feedbackDiv.textContent = '';
 
             challengeCount++; // Increment challenge counter
+
+            // Set dynamic tolerance: more lenient for initial quadratic challenges
+            if (challengeCount <= initialQuadraticXValues.length) {
+                currentTangentTolerance = 0.15; // Slightly more forgiving
+            } else {
+                currentTangentTolerance = TANGENT_TOLERANCE_BASE; // Revert to base tolerance
+            }
 
             let selectedCurveDef;
             let randomX;
@@ -422,6 +452,10 @@
             // Initialize user line angle to horizontal
             userLineAngle = 0;
 
+            // Update UI displays
+            scoreDisplay.textContent = score; // Ensure score is updated on new challenge (though it only changes on check)
+            challengeNumberDisplay.textContent = challengeCount;
+
             drawAll();
         }
 
@@ -434,10 +468,11 @@
             const actualSlope = currentDerivative.deriv(targetPoint.x);
             const userSlope = Math.tan(userLineAngle); // Slope from angle
 
+            // Use currentTangentTolerance for checking correctness
             const diff = Math.abs(actualSlope - userSlope);
 
             feedbackDiv.classList.remove('hidden');
-            if (diff < TANGENT_TOLERANCE) {
+            if (diff < currentTangentTolerance) { // Use dynamic tolerance here
                 feedbackDiv.classList.add('correct');
                 feedbackDiv.classList.remove('incorrect');
                 feedbackDiv.innerHTML = `
@@ -445,6 +480,8 @@
                     <p>Actual Gradient: ${actualSlope.toFixed(2)}</p>
                     <p>Your Estimated Gradient: ${userSlope.toFixed(2)}</p>
                 `;
+                score += 10; // Award points for correct answer
+                scoreDisplay.textContent = score; // Update score display
                 // Trigger confetti!
                 confetti({
                     particleCount: 100,
@@ -477,9 +514,9 @@
                     if (userSlope > 0) {
                         feedbackText += `too steep (sloping upwards).`;
                     } else if (userSlope < 0) {
-                        feedbackText += `too steep (sloping downwards).`; // Changed from "too flat" to "too steep"
+                        feedbackText += `too steep (sloping downwards).`;
                     } else {
-                        // This case should ideally not be reached if diff > TANGENT_TOLERANCE
+                        // This case should ideally not be reached if diff > currentTangentTolerance
                         feedbackText += `slightly off horizontal.`;
                     }
                 }
