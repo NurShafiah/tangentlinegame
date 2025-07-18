@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tangent Line Game</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the canvas and overall layout */
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f0f4f8; /* Light blue-gray background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .game-container {
+            background-color: #ffffff;
+            border-radius: 1rem; /* Rounded corners for the container */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1); /* Soft shadow */
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 900px;
+            width: 100%;
+            gap: 1.5rem;
+        }
+        canvas {
+            background-color: #e2e8f0; /* Light gray canvas background */
+            border: 1px solid #cbd5e1; /* Subtle border */
+            border-radius: 0.75rem; /* Rounded corners for canvas */
+            display: block;
+            width: 100%; /* Make canvas responsive */
+            max-width: 800px; /* Max width for larger screens */
+            height: 400px; /* Fixed height for consistency */
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            width: 100%;
+        }
+        button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem; /* Rounded buttons */
+            font-weight: 600;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        .btn-primary {
+            background-color: #4f46e5; /* Indigo */
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #4338ca; /* Darker indigo */
+        }
+        .btn-secondary {
+            background-color: #64748b; /* Slate */
+            color: white;
+        }
+        .btn-secondary:hover {
+            background-color: #475569; /* Darker slate */
+        }
+        .feedback-box {
+            background-color: #f8fafc; /* Lighter background for feedback */
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            margin-top: 1rem;
+            width: 100%;
+            max-width: 600px;
+            text-align: center;
+            font-size: 1.1rem;
+            color: #334155; /* Darker text */
+        }
+        .feedback-box.correct {
+            background-color: #d1fae5; /* Green for correct */
+            border-color: #34d399;
+            color: #065f46;
+        }
+        .feedback-box.incorrect {
+            background-color: #fee2e2; /* Red for incorrect */
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+        /* Message box for alerts */
+        .message-box {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            display: none; /* Hidden by default */
+            text-align: center;
+        }
+        .message-box button {
+            margin-top: 15px;
+            background-color: #4f46e5;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="game-container">
+        <h1 class="text-3xl font-bold text-gray-800 mb-4">Tangent Line Explorer</h1>
+        <p class="text-lg text-gray-600 mb-6 text-center">Click and drag the blue line *from the red point* to make it tangent to the curve. Then, check your answer!</p>
+
+        <canvas id="gameCanvas"></canvas>
+
+        <div class="controls">
+            <button id="newCurveBtn" class="btn-primary">New Curve & Point</button>
+            <button id="checkTangentBtn" class="btn-secondary">Check Tangent</button>
+            <button id="clearBtn" class="btn-secondary">Clear Line</button>
+        </div>
+
+        <div id="feedback" class="feedback-box hidden"></div>
+    </div>
+
+    <!-- Message Box HTML -->
+    <div id="messageBox" class="message-box">
+        <p id="messageText"></p>
+        <button id="messageBoxCloseBtn">OK</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const newCurveBtn = document.getElementById('newCurveBtn');
+        const checkTangentBtn = document.getElementById('checkTangentBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const feedbackDiv = document.getElementById('feedback');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const messageBoxCloseBtn = document.getElementById('messageBoxCloseBtn');
+
+        // --- Canvas and Coordinate System Setup ---
+        const CANVAS_WIDTH = 800; // Will be scaled by CSS
+        const CANVAS_HEIGHT = 400;
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+
+        const BASE_SCALE = 50; // Pixels per unit for default zoom
+        let currentScale = BASE_SCALE; // Dynamic scale
+        let dynamicOriginX = CANVAS_WIDTH / 2; // Dynamic X origin
+        let dynamicOriginY = CANVAS_HEIGHT / 2; // Dynamic Y origin
+
+        // Function to convert mathematical (x, y) to canvas (px, py)
+        function toCanvasCoords(x, y) {
+            return {
+                px: dynamicOriginX + x * currentScale,
+                py: dynamicOriginY - y * currentScale // Y-axis inverted in canvas
+            };
+        }
+
+        // Function to convert canvas (px, py) to mathematical (x, y)
+        function toMathCoords(px, py) {
+            return {
+                x: (px - dynamicOriginX) / currentScale,
+                y: (dynamicOriginY - py) / currentScale
+            };
+        }
+
+        // New function to adjust zoom and pan
+        function applyZoomAndPan(zoomFactor = 1, centerX = 0, centerY = 0) {
+            currentScale = BASE_SCALE * zoomFactor;
+
+            // Calculate new origin so that (centerX, centerY) in math coords is at the canvas center
+            dynamicOriginX = CANVAS_WIDTH / 2 - centerX * currentScale;
+            dynamicOriginY = CANVAS_HEIGHT / 2 + centerY * currentScale;
+        }
+
+        // --- Game State Variables ---
+        let currentCurve = null;
+        let currentDerivative = null;
+        let targetPoint = { x: 0, y: 0 }; // Mathematical coordinates
+        let userLineAngle = 0; // Radians
+        let isDragging = false;
+        const TANGENT_TOLERANCE = 0.1; // Tolerance for checking tangent slope
+
+        // Add a counter for challenges and specific x values for initial quadratic challenges
+        let challengeCount = 0;
+        const initialQuadraticXValues = [-1.5, 0, 1.5]; // Specific x values for first 3 quadratic challenges (negative, zero, positive gradient)
+
+
+        // --- Curve Definitions (Function and its Derivative) ---
+        const curves = [
+            {
+                name: "y = x²",
+                func: x => x * x,
+                deriv: x => 2 * x,
+                range: { xMin: -3, xMax: 3 } // x range for generating points
+            },
+            {
+                name: "y = x³",
+                func: x => x * x * x,
+                deriv: x => 3 * x * x,
+                range: { xMin: -2, xMax: 2 }
+            },
+            {
+                name: "y = sin(x)",
+                func: x => Math.sin(x),
+                deriv: x => Math.cos(x),
+                range: { xMin: -Math.PI * 2, xMax: Math.PI * 2 }
+            },
+            {
+                name: "y = e^x",
+                func: x => Math.exp(x),
+                deriv: x => Math.exp(x),
+                range: { xMin: -1.5, xMax: 1.5 }
+            }
+        ];
+
+        // --- Drawing Functions ---
+
+        function drawAxes() {
+            ctx.strokeStyle = '#94a3b8'; // Slate-400
+            ctx.lineWidth = 1;
+
+            // X-axis
+            ctx.beginPath();
+            ctx.moveTo(0, dynamicOriginY); // Use dynamic origin
+            ctx.lineTo(CANVAS_WIDTH, dynamicOriginY);
+            ctx.stroke();
+
+            // Y-axis
+            ctx.beginPath();
+            ctx.moveTo(dynamicOriginX, 0); // Use dynamic origin
+            ctx.lineTo(dynamicOriginX, CANVAS_HEIGHT);
+            ctx.stroke();
+
+            // Draw ticks and labels
+            ctx.fillStyle = '#64748b'; // Slate-600
+            ctx.font = '10px Arial';
+
+            // Calculate visible range for ticks based on dynamic origin and scale
+            const xMinVisible = toMathCoords(0, 0).x;
+            const xMaxVisible = toMathCoords(CANVAS_WIDTH, 0).x;
+            const yMinVisible = toMathCoords(0, CANVAS_HEIGHT).y;
+            const yMaxVisible = toMathCoords(0, 0).y;
+
+            // Draw X-axis ticks and labels
+            for (let i = Math.ceil(xMinVisible); i <= Math.floor(xMaxVisible); i++) {
+                // Only draw if the tick is within visible canvas X bounds
+                const { px } = toCanvasCoords(i, 0);
+                if (px >= 0 && px <= CANVAS_WIDTH) {
+                    ctx.beginPath();
+                    ctx.moveTo(px, dynamicOriginY - 5);
+                    ctx.lineTo(px, dynamicOriginY + 5);
+                    ctx.stroke();
+                    if (i !== 0) { // Don't label the origin twice
+                        ctx.fillText(i, px - 5, dynamicOriginY + 15);
+                    }
+                }
+            }
+            // Draw Y-axis ticks and labels
+            for (let i = Math.ceil(yMinVisible); i <= Math.floor(yMaxVisible); i++) {
+                // Only draw if the tick is within visible canvas Y bounds
+                const { py } = toCanvasCoords(0, i);
+                if (py >= 0 && py <= CANVAS_HEIGHT) {
+                    ctx.beginPath();
+                    ctx.moveTo(dynamicOriginX - 5, py);
+                    ctx.lineTo(dynamicOriginX + 5, py);
+                    ctx.stroke();
+                    if (i !== 0) { // Don't label the origin twice
+                        ctx.fillText(i, dynamicOriginX + 5, py + 5);
+                    }
+                }
+            }
+            // Label for origin (0,0) if visible
+            if (dynamicOriginX >= 0 && dynamicOriginX <= CANVAS_WIDTH &&
+                dynamicOriginY >= 0 && dynamicOriginY <= CANVAS_HEIGHT) {
+                ctx.fillText('0', dynamicOriginX - 10, dynamicOriginY + 15); // Adjust position as needed
+            }
+        }
+
+        function drawCurve() {
+            if (!currentCurve) return;
+
+            ctx.strokeStyle = '#1a1a1a'; // Dark black for the curve
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+
+            // Draw curve by iterating through canvas pixels and converting to math coords
+            for (let px = 0; px <= CANVAS_WIDTH; px++) {
+                const { x } = toMathCoords(px, 0);
+                const y = currentCurve.func(x);
+                const { px: drawPx, py: drawPy } = toCanvasCoords(x, y);
+
+                if (px === 0) {
+                    ctx.moveTo(drawPx, drawPy);
+                } else {
+                    ctx.lineTo(drawPx, drawPy);
+                }
+            }
+            ctx.stroke();
+        }
+
+        function drawTargetPoint() {
+            if (!targetPoint) return;
+
+            const { px, py } = toCanvasCoords(targetPoint.x, targetPoint.y);
+            ctx.strokeStyle = '#dc2626'; // Red-600
+            ctx.lineWidth = 3; // Line width for the cross
+
+            const crossSize = 10; // Size of each arm of the cross
+
+            ctx.beginPath();
+            // Draw horizontal line of the cross
+            ctx.moveTo(px - crossSize, py);
+            ctx.lineTo(px + crossSize, py);
+            // Draw vertical line of the cross
+            ctx.moveTo(px, py - crossSize);
+            ctx.lineTo(px, py + crossSize);
+            ctx.stroke();
+        }
+
+        function drawUserLine() {
+            if (!targetPoint) return;
+
+            const { px: targetPx, py: targetPy } = toCanvasCoords(targetPoint.x, targetPoint.y);
+
+            ctx.strokeStyle = '#3b82f6'; // Blue-500
+            ctx.lineWidth = 2; // Thinner line
+            ctx.lineCap = 'round'; // Rounded line ends
+
+            ctx.beginPath();
+            // Calculate points for the line based on angle, extending beyond canvas
+            const lineLength = Math.max(CANVAS_WIDTH, CANVAS_HEIGHT); // Sufficiently long line
+            const dx = lineLength * Math.cos(userLineAngle);
+            const dy = lineLength * Math.sin(userLineAngle);
+
+            // Start point (backwards from target)
+            ctx.moveTo(targetPx - dx, targetPy + dy); // Note: +dy because canvas Y is inverted
+
+            // End point (forwards from target)
+            ctx.lineTo(targetPx + dx, targetPy - dy); // Note: -dy because canvas Y is inverted
+            ctx.stroke();
+        }
+
+        function drawAll() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT); // Clear canvas
+            drawAxes();
+            drawCurve();
+            drawTargetPoint();
+            drawUserLine();
+        }
+
+        // --- Game Logic ---
+
+        function newChallenge() {
+            // Clear previous feedback
+            feedbackDiv.classList.add('hidden');
+            feedbackDiv.classList.remove('correct', 'incorrect');
+            feedbackDiv.textContent = '';
+
+            challengeCount++; // Increment challenge counter
+
+            let selectedCurveDef;
+            let randomX;
+
+            if (challengeCount <= initialQuadraticXValues.length) {
+                // For the first N challenges, use the quadratic curve with specific x values
+                selectedCurveDef = curves.find(curve => curve.name === "y = x²");
+                randomX = initialQuadraticXValues[challengeCount - 1]; // Use pre-defined x
+            } else {
+                // After the initial challenges, select a random curve
+                const randomIndex = Math.floor(Math.random() * curves.length);
+                selectedCurveDef = curves[randomIndex];
+                const xRange = selectedCurveDef.range;
+                randomX = xRange.xMin + Math.random() * (xRange.xMax - xRange.xMin);
+            }
+
+            currentCurve = selectedCurveDef;
+            currentDerivative = selectedCurveDef; // Derivative function is part of the same object
+
+            // Ensure the target point is within visible canvas Y bounds
+            let y = currentCurve.func(randomX);
+            let { py } = toCanvasCoords(randomX, y); // Use default scale for initial check
+
+            // Re-roll x if y is out of bounds (only applies to random selection after initial 3)
+            let attempts = 0;
+            while ((py < 20 || py > CANVAS_HEIGHT - 20) && attempts < 100 && challengeCount > initialQuadraticXValues.length) {
+                randomX = selectedCurveDef.range.xMin + Math.random() * (selectedCurveDef.range.xMax - selectedCurveDef.range.xMin);
+                y = currentCurve.func(randomX);
+                py = toCanvasCoords(randomX, y).py; // Re-check with default scale
+                attempts++;
+            }
+            if (attempts >= 100) {
+                console.warn("Could not find a suitable point within canvas bounds after many attempts. Using a default point.");
+                randomX = 0;
+                y = currentCurve.func(randomX);
+            }
+
+            targetPoint = { x: randomX, y: y };
+
+            // Apply zoom and pan to center on the target point
+            const zoomLevel = 1.5; // Example zoom factor
+            applyZoomAndPan(zoomLevel, targetPoint.x, targetPoint.y);
+
+            // Initialize user line angle to horizontal
+            userLineAngle = 0;
+
+            drawAll();
+        }
+
+        function checkTangent() {
+            if (!currentCurve || !targetPoint) {
+                showMessage("Please generate a new curve first!");
+                return;
+            }
+
+            const actualSlope = currentDerivative.deriv(targetPoint.x);
+            const userSlope = Math.tan(userLineAngle); // Slope from angle
+
+            const diff = Math.abs(actualSlope - userSlope);
+
+            feedbackDiv.classList.remove('hidden');
+            if (diff < TANGENT_TOLERANCE) {
+                feedbackDiv.classList.add('correct');
+                feedbackDiv.classList.remove('incorrect');
+                feedbackDiv.innerHTML = `
+                    <p><strong>Correct!</strong> Your line is tangent.</p>
+                    <p>Actual Gradient: ${actualSlope.toFixed(2)}</p>
+                    <p>Your Estimated Gradient: ${userSlope.toFixed(2)}</p>
+                `;
+            } else {
+                feedbackDiv.classList.add('incorrect');
+                feedbackDiv.classList.remove('correct');
+                let feedbackText = `<strong>Not quite right.</strong> Your line is `;
+
+                // Refined logic for "too steep" vs "too flat" based on gradient sign
+                if (actualSlope > 0) { // Actual slope is positive
+                    if (userSlope > actualSlope) {
+                        feedbackText += `too steep.`;
+                    } else {
+                        feedbackText += `too flat (not steep enough).`;
+                    }
+                } else if (actualSlope < 0) { // Actual slope is negative
+                    // For negative slopes:
+                    // userSlope > actualSlope (e.g., actual -2, user -0.9) means closer to 0, less steep.
+                    // userSlope < actualSlope (e.g., actual -2, user -3) means further from 0, more steep.
+                    if (userSlope > actualSlope) {
+                        feedbackText += `too flat (not steep enough).`;
+                    } else {
+                        feedbackText += `too steep.`;
+                    }
+                } else { // Actual slope is zero (horizontal)
+                    if (Math.abs(userSlope) > TANGENT_TOLERANCE) {
+                        feedbackText += `not horizontal.`;
+                    } else {
+                        // This case should ideally not be reached if diff > TANGENT_TOLERANCE
+                        // but userSlope is very close to 0.
+                        feedbackText += `slightly off horizontal.`;
+                    }
+                }
+
+                feedbackDiv.innerHTML = `
+                    <p>${feedbackText}</p>
+                    <p class="mt-2 text-sm">Remember: A tangent line should only *touch* the curve at that specific point, without cutting through it or crossing it elsewhere nearby. Imagine it just "grazing" the curve.</p>
+                    <p class="mt-2">Actual Gradient: ${actualSlope.toFixed(2)}</p>
+                    <p>Your Estimated Gradient: ${userSlope.toFixed(2)}</p>
+                `;
+            }
+        }
+
+        function clearLine() {
+            userLineAngle = 0; // Reset to horizontal
+            drawAll();
+            feedbackDiv.classList.add('hidden'); // Clear feedback
+            feedbackDiv.classList.remove('correct', 'incorrect');
+            feedbackDiv.textContent = '';
+        }
+
+        // --- Event Handlers ---
+
+        function getMousePos(event) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            return {
+                x: (event.clientX - rect.left) * scaleX,
+                y: (event.clientY - rect.top) * scaleY
+            };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!targetPoint) return;
+            const mousePos = getMousePos(e);
+            const { px: targetPx, py: targetPy } = toCanvasCoords(targetPoint.x, targetPoint.y);
+
+            // Check if mouse is near the target point to start dragging the line
+            // Increased the radius to 40 for easier grabbing
+            const distance = Math.sqrt(Math.pow(mousePos.x - targetPx, 2) + Math.pow(mousePos.y - targetPy, 2));
+            if (distance < 40) { // Allow dragging if near the point
+                isDragging = true;
+                // Calculate initial angle to prevent jump
+                const dx = mousePos.x - targetPx;
+                const dy = targetPy - mousePos.y; // Canvas Y is inverted
+                userLineAngle = Math.atan2(dy, dx);
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging || !targetPoint) return;
+
+            const mousePos = getMousePos(e);
+            const { px: targetPx, py: targetPy } = toCanvasCoords(targetPoint.x, targetPoint.y);
+
+            const dx = mousePos.x - targetPx;
+            const dy = targetPy - mousePos.y; // Canvas Y is inverted
+
+            userLineAngle = Math.atan2(dy, dx);
+            drawAll(); // Redraw the line as it's being dragged
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false; // Stop dragging if mouse leaves canvas
+        });
+
+        // --- Message Box Functions (Replaces alert()) ---
+        function showMessage(message) {
+            messageText.textContent = message;
+            messageBox.style.display = 'block';
+        }
+
+        messageBoxCloseBtn.addEventListener('click', () => {
+            messageBox.style.display = 'none';
+        });
+
+        // --- Initialize Game ---
+        newCurveBtn.addEventListener('click', newChallenge);
+        checkTangentBtn.addEventListener('click', checkTangent);
+        clearBtn.addEventListener('click', clearLine);
+
+        // Initial game setup when window loads
+        window.onload = function() {
+            newChallenge(); // Start with a new curve
+        };
+
+    </script>
+</body>
+</html>
