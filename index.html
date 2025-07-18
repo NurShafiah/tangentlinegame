@@ -475,9 +475,9 @@
                     }
                 } else { // actualSlope is 0 (horizontal)
                     if (userSlope > 0) {
-                        feedbackText += `too steep.`;
+                        feedbackText += `too steep (sloping upwards).`;
                     } else if (userSlope < 0) {
-                        feedbackText += `too flat (not steep enough).`;
+                        feedbackText += `too steep (sloping downwards).`; // Changed from "too flat" to "too steep"
                     } else {
                         // This case should ideally not be reached if diff > TANGENT_TOLERANCE
                         feedbackText += `slightly off horizontal.`;
